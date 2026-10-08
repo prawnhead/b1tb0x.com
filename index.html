@@ -13,19 +13,30 @@
     body {
       display: flex;
       align-items: center;
+      flex-direction: column;
       justify-content: center;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+      font-size: 2rem;
     }
     h1 {
       margin: 0;
-      font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
-      font-size: 2rem;
+      font-size: 1em;
       font-weight: 400;
       color: #fff;
     }
     .n { color: #f00; }
+    /* golden-ratio rectangle, 1.5x the 6ch wordmark width */
+    .golden {
+      width: 9ch;
+      aspect-ratio: 1.618 / 1;
+      margin-top: 0.5em;
+      border: 1px solid #808080;
+      box-sizing: border-box;
+    }
   </style>
 </head>
 <body>
   <h1>b<span class="n">1</span>tb<span class="n">0</span>x</h1>
+  <div class="golden"></div>
 </body>
 </html>

@@ -27,16 +27,18 @@
     .n { color: #f00; }
     /* golden-ratio rectangle, 1.5x the 6ch wordmark width */
     .golden {
+      display: block;
       width: 9ch;
       aspect-ratio: 1.618 / 1;
       margin-top: 0.5em;
       border: 1px solid #808080;
       box-sizing: border-box;
     }
+    .golden:hover { border-color: #fff; }
   </style>
 </head>
 <body>
   <h1>b<span class="n">1</span>tb<span class="n">0</span>x</h1>
-  <div class="golden"></div>
+  <a class="golden" href="entitystore.html" aria-label="EntityStore schema"></a>
 </body>
 </html>

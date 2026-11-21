@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>b1tb0x · Remote FileVault unlock over SSH</title>
+  <meta name="description" content="Unlock a FileVault-encrypted Apple Silicon Mac remotely over SSH after a reboot or power failure — including reaching it across a VPN via a jump host.">
+  <style>
+    :root {
+      --bg: #000;
+      --fg: #fff;
+      --grey: #9aa0a6;
+      --line: #808080;
+      --red: #f00;
+      --card: #121212;
+    }
+    html, body { margin: 0; background: var(--bg); }
+    body {
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+      color: var(--fg);
+      line-height: 1.5;
+      padding: 2rem 16px 3rem;
+      max-width: 820px;
+      margin: 0 auto;
+      box-sizing: border-box;
+    }
+    a { color: var(--grey); text-decoration: none; }
+    a:hover { color: var(--fg); }
+    header h1 { font-size: 1.6rem; font-weight: 400; margin: 0 0 .2rem; }
+    header .n { color: var(--red); }
+    header p { color: var(--grey); margin: 0 0 1.6rem; font-size: .95rem; }
+    h2 { font-size: 1rem; font-weight: 400; color: var(--grey); border-bottom: 1px solid #222;
+         padding-bottom: .4rem; margin: 2.4rem 0 1rem; }
+    p { margin: 0 0 1rem; }
+    .lead { font-size: 1rem; }
+    .grey { color: var(--grey); }
+    b { color: var(--fg); font-weight: 400; }
+    code { color: var(--fg); }
+    pre {
+      background: var(--card); border: 1px solid #222; border-radius: 6px;
+      padding: .9rem 1rem; overflow-x: auto; font-size: .88rem; line-height: 1.45;
+      color: var(--fg); margin: 0 0 1rem;
+    }
+    pre .c { color: var(--grey); }
+    ol, ul { padding-left: 1.3rem; }
+    li { margin: .4rem 0; }
+    .step { counter-reset: none; }
+    .note {
+      background: var(--card); border-left: 2px solid var(--red);
+      padding: .8rem 1rem; margin: 0 0 1rem; font-size: .9rem; color: var(--grey);
+    }
+    .note b { color: var(--fg); }
+    footer { margin-top: 3rem; color: var(--grey); font-size: .8rem; border-top: 1px solid #222;
+             padding-top: 1rem; display: flex; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>b<span class="n">1</span>tb<span class="n">0</span>x</h1>
+    <p>Remote FileVault unlock over SSH</p>
+  </header>
+
+  <p class="lead">A FileVault-encrypted Mac that reboots stops at a pre-boot screen and waits
+  for someone to unlock the disk before it can finish starting. On an Apple Silicon Mac with
+  Remote Login enabled, you can do that unlock <b>over SSH</b> — no monitor, no keyboard, no
+  one standing at the machine. This is how, and how to reach it remotely across a VPN.</p>
+
+  <h2>why a reboot leaves it stuck</h2>
+  <p class="grey">When FileVault is on, the system disk is encrypted. After a reboot the Mac can
+  start the firmware and a minimal pre-boot environment, but it cannot mount the real system
+  volume until the disk is unlocked with a local account's credentials. Until then the full OS —
+  and anything that depends on it, including any VPN client — is not running.</p>
+
+  <h2>the mechanism</h2>
+  <p>On Apple Silicon Macs, when <b>Remote Login (SSH)</b> is enabled, macOS automatically brings
+  up a minimal SSH listener in that pre-boot environment after any restart. You do not need to
+  arm it per-reboot (the old <code>fdesetup authrestart</code> step from Intel/T2 machines no
+  longer applies). You connect, authenticate with a local account, the disk unlocks, that minimal
+  session closes, and the Mac continues to a normal boot where SSH works as usual.</p>
+
+  <pre><span class="c"># from a machine on the same local network as the Mac</span>
+ssh user@&lt;mac-local-ip&gt;
+
+This system is locked. To unlock it, use a local
+account name and password.
+(user@&lt;mac-local-ip&gt;) Password:
+System successfully unlocked.
+You may now use SSH to authenticate normally.</pre>
+
+  <p class="grey">The connection then closes on its own — that is expected. Wait ~30–60 s for the
+  Mac to finish booting, then SSH in normally.</p>
+
+  <h2>the catch: a VPN can't reach the pre-boot stage</h2>
+  <p>The pre-boot listener runs before the OS is up, so <b>no VPN daemon is running</b> — a
+  mesh-VPN address or hostname for the Mac is dead until <i>after</i> you have already unlocked it.
+  The pre-boot environment only brings up base networking (wired DHCP → a local IP) and answers
+  SSH on that local address.</p>
+
+  <p>So you can only reach the unlock prompt over the <b>local network</b>. If you are off-site,
+  you reach that local network through a <b>jump host</b>: any always-on machine on the same LAN
+  that you can get to over your VPN.</p>
+
+  <pre><span class="c"># reach the LAN via an always-on relay, then unlock the Mac by its local IP</span>
+ssh -J user@relay-host user@&lt;mac-local-ip&gt;</pre>
+
+  <div class="note">
+    <b>Make the relay a plain, unencrypted Linux box.</b> If your relay is itself an encrypted
+    Mac, a power failure leaves <i>it</i> sitting at the same locked pre-boot screen — chicken and
+    egg. A small Linux host (a Pi, a NAS, a hypervisor) with no full-disk encryption boots
+    unattended straight to a working SSH and VPN, so it is always there to jump through.
+  </div>
+
+  <h2>surviving a power failure, not just a reboot</h2>
+  <p>For this to work after the power goes out and comes back, two things must be true:</p>
+  <ul>
+    <li><b>The Mac must power itself back on.</b> Apple Silicon Macs restore their previous power
+    state after power is restored; the control is <i>System Settings → Energy → "Start up when
+    power is connected"</i>, set to <b>Always</b>. (The legacy <code>pmset autorestart</code> flag
+    does <i>not</i> govern this on Apple Silicon — don't trust it.)</li>
+    <li><b>The relay must come back on its own</b> — unencrypted and set to auto-boot, so it is
+    reachable while the Mac waits locked.</li>
+  </ul>
+
+  <h2>recovery checklist</h2>
+  <ol>
+    <li>Remote Login (SSH) enabled on each Mac.</li>
+    <li>Each Mac set to start up automatically when power is connected.</li>
+    <li>At least one always-on, unencrypted Linux box on the LAN, reachable over your VPN.</li>
+    <li>Know each Mac's local IP at the pre-boot stage (normally its usual wired DHCP address —
+    confirm it, since the unlock target depends on it).</li>
+    <li>After an outage: VPN → relay → <code>ssh user@&lt;mac-local-ip&gt;</code> → enter a local
+    password → wait → reconnect normally.</li>
+  </ol>
+
+  <footer>
+    <span>b<span class="n">1</span>tb<span class="n">0</span>x</span>
+    <span>Apple Silicon · FileVault · macOS</span>
+  </footer>
+</body>
+</html>
